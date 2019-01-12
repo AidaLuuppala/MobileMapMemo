@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="format-detection" content="telephone=no" />
+	<meta name="msapplication-tap-highlight" content="no" />
+	<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width" />
+	<!--
+	<meta http-equiv="Content-Security-Policy" content="
+			default-src 'self' 'unsafe-inline'  https://mts.googleapis.com https://maps.googleapis.com https://maps.gstatic.com ws://192.168.8.102:3000/ http://code.jquery.com https://code.jquery.com https://csi.gstatic.com  https://ssl.gstatic.com gap: data: blob: filesystem: ; 
+	" />
+	-->
+	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+	<script src="https://code.jquery.com/jquery-2.1.4.js" integrity="sha256-siFczlgw4jULnUICcdm9gjQPZkw/YPDqhQ9+nAOScE4="	crossorigin="anonymous"></script>
+	<script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="css/index.css">
+	<title>Map Memo</title>
+</head>
+<!--ETUSIVU------------------------------------------------------------------->
+<body>
+	<div data-role="page" id="etusivu">
+		<div data-data-role="header">
+		</div>
+		
+		<div data-role="main" class="ui-content ui-body-a">	
+			<div id="map" style="height:600px"></div>
+		</div>
+
+		<div data-role="footer">
+		</div>
+	</div>
+	
+<!--TALLENNA------------------------------------------------------------------>
+	<div data-role="page" id="tallenna">
+		<div data-role="header">
+		</div>
+		
+		<div role="main" class="ui-content ui-body-a">
+			<div id="tallennaPaikka">
+				<form id="tallennaLomake">
+					<input type="hidden" name="lat" id="lat">
+					<input type="hidden" name="lng" id="lng">
+					
+					<label for="nimi">Nimi:</label>
+					<input type="text" name="nimi" id="nimi">
+					
+					<label for="kuva">Kuva:</label>
+					<img id="naytaKuva" style="display:none" src="" alt="" height="200">			
+					<button type="button" disabled id="otaKuva">Ota kuva</button>	
+					<input type="hidden" name="kuva" id="kuva">
+					
+					<input type="button" class="ui-btn" id="tallennaNappi" value="Tallenna">
+					<a class="ui-btn ui-corner-all" data-rel="back" id="peruutaNappi">Peruuta</a>
+				</form>
+			</div>
+		</div>
+		
+		<div data-role="footer">
+		</div>
+	</div>
+
+<!--KOODI--------------------------------------------------------------->	
+	<script type="text/javascript" src="cordova.js"></script> <!-- mahdollistaa laitteen ominaisuuksien käytön -->	
+	<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDKhguQ8FkJroK8w_6DBZB9_-EOpaD6OLI&libraries=geometry"></script>
+	<script>
+
+		var laiteKesken = $.Deferred();
+		var etusivuKesken = $.Deferred();
+		var imageStr = "";
+		var pictureSource;
+		var destinationType;
+		
+		$.when(laiteKesken, etusivuKesken).done(haeSijainti, kameraValmis);
+		
+		document.addEventListener("deviceReady", onDeviceReady, false);
+		
+		function onDeviceReady() {
+			pictureSource = navigator.camera.PictureSourceType;
+			destinationType = navigator.camera.DestinationType;
+			laiteKesken.resolve();
+			etusivuKesken.resolve();
+		}
+
+//--SIJAINTI----------------------------------------------------------------------
+		
+		function haeSijainti() {
+			navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, { timeout: 20000 });
+			function onLocationSuccess(position) {						
+				teeMap(position.coords.latitude, position.coords.longitude);
+				console.log("Paikannus onnistui");
+				//alert("Paikannus onnistui");
+			}
+			function onLocationError() {
+				teeMap(60.201645, 24.934199);
+				console.log("Paikannus ei onnistu");
+				//alert("Paikannus ei onnistu");
+			}
+		}
+		
+//--KARTTA---------------------------------------------------------------------
+		
+		var paikka;
+		var kartta;
+		function teeMap(lat, lon) {				
+			paikka = new google.maps.LatLng(lat, lon);	
+			
+			var myOptions = {
+				zoom:12,
+				center: paikka
+			};
+			
+			kartta = new google.maps.Map(document.getElementById("map"), myOptions);		
+			
+			var image = 'img/marker_red.png';
+			var marker = new google.maps.Marker({
+				position: paikka,
+				map: kartta,
+				icon: image,
+				title: "Sijaintisi"
+			});
+			
+			haeMarkerit();
+			
+			google.maps.event.addListener(kartta, "click", function (event) {
+				var lat = event.latLng.lat();
+				var lng = event.latLng.lng();
+				localStorage.setItem("lat", lat);
+				localStorage.setItem("lng", lng);
+				$(location).attr("href","#tallenna");
+			});
+		}
+		
+		
+//--KAMERA---------------------------------------------------------------------
+		
+		function kameraValmis() {			
+			$( "#otaKuva" ).attr( "disabled", false );
+			
+			$( "#otaKuva" ).on("tap", function() {				
+				navigator.camera.getPicture(onCaptureSuccess, onError, {
+					quality: 25,
+					destinationType: Camera.DestinationType.DATA_URL, //base 64 formaattiin
+					saveToPhotoAlbum: true,					
+				})
+			})
+						
+			function onCaptureSuccess(imageData) {		
+				$("#naytaKuva").attr("src", "data:image/jpeg;base64," + imageData); // kun DATA_URL
+				$("#naytaKuva").show();
+				imageStr = imageData;
+				localStorage.setItem("kuva", imageStr);
+			}
+			
+			function onError() {
+				console.log("Kuvaaminen ei onnistu");
+			}
+		}
+		
+//--TALLENNA--------------------------------------------------------------------------
+		
+		$("#tallennaNappi").on("tap", function() {
+			
+			var lat = localStorage.getItem("lat");
+			console.log(lat);
+			var lng = localStorage.getItem("lng");
+			console.log(lng);
+			var kuva = localStorage.getItem("kuva");
+			console.log(kuva);
+			
+			$("#lat").val(lat);
+			$("#lng").val(lng);
+			$("#kuva").val(kuva);
+			
+			$.ajax({
+				type: 'POST',
+				data: $("#tallennaLomake").serialize(),
+				url: 'http://proto387.haaga-helia.fi/~a1800273/backend/insert.php',
+				success: function(data){
+					console.log("Paikka lisätty tietokantaan");
+					localStorage.clear();
+					$("#tallennaLomake")[0].reset();
+					$("#naytaKuva").hide();
+					haeMarkerit();
+					$(location).attr("href","#etusivu");
+				},
+				error: function(){	
+					console.log("Paikan lisääminen ei onnistunut");
+				}
+			});
+		});
+		
+		$("#peruutaNappi").on("tap", function() {
+			
+			$("#tallennaLomake")[0].reset();
+			$("#naytaKuva").hide();
+			haeMarkerit();
+			
+		});
+		
+//--NÄYTÄ KARTALLA--------------------------------------------------------------------------
+		
+
+		
+		function haeMarkerit() {
+			
+			$.getJSON("http://proto387.haaga-helia.fi/~a1800273/backend/select.php", function(result){
+											
+				for(var i = 0; i < result.length; i++){
+					var paikka={
+					"lat" : parseFloat(result[i].lat),
+					"lng" : parseFloat(result[i].lng)
+					};
+					var nimi = result[i].nimi;
+					var kuva = "data:image/jpeg;base64," + result[i].kuva;
+					
+					var image = 'img/marker_blue.png';
+					var marker = new google.maps.Marker({
+						position: paikka,
+						map: kartta,
+						icon: image,
+						title: nimi
+					});
+					
+					var contentString = "<img src=" + kuva + " height='100' width='100'><div> " + nimi + "</div>";
+					
+					addInfoWindow(marker, contentString);
+					
+				}
+			});
+		}
+		
+		function addInfoWindow(marker, contentString) {
+
+			var infoWindow = new google.maps.InfoWindow({
+				content: contentString
+			});
+
+			google.maps.event.addListener(marker, 'click', function () {
+				infoWindow.open(map, marker);
+			});
+		}
+	
+		
+	</script>
+	
+</body>
+
+</html>

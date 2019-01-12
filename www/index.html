@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="format-detection" content="telephone=no" />
+	<meta name="msapplication-tap-highlight" content="no" />
+	<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width" />
+	<!--
+	<meta http-equiv="Content-Security-Policy" content="
+			default-src 'self' 'unsafe-inline'  https://mts.googleapis.com https://maps.googleapis.com https://maps.gstatic.com ws://192.168.8.102:3000/ http://code.jquery.com https://code.jquery.com https://csi.gstatic.com  https://ssl.gstatic.com gap: data: blob: filesystem: ; 
+	" />
+	-->
+	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+	<script src="https://code.jquery.com/jquery-2.1.4.js" integrity="sha256-siFczlgw4jULnUICcdm9gjQPZkw/YPDqhQ9+nAOScE4="	crossorigin="anonymous"></script>
+	<script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="css/index.css">
+	<title>Map Memo</title>
+</head>
+<!--FRONT PAGE------------------------------------------------------------------->
+<body>
+	<div data-role="page" id="frontPage">
+		<div data-data-role="header">
+		</div>
+		
+		<div data-role="main" class="ui-content ui-body-a">	
+			<div id="map" style="height:600px"></div>
+		</div>
+
+		<div data-role="footer">
+		</div>
+	</div>
+	
+<!--SAVE PAGE------------------------------------------------------------------>
+	<div data-role="page" id="savePage">
+		<div data-role="header">
+		</div>
+		
+		<div role="main" class="ui-content ui-body-a">
+			<div id="savePosition">
+				<form id="saveForm">
+					<input type="hidden" name="lat" id="lat">
+					<input type="hidden" name="lng" id="lng">
+					
+					<label for="name">What's here:</label>
+					<input type="text" name="name" id="name">
+					
+					<label for="image">Image:</label>
+					<img id="showImage" style="display:none" src="" alt="" height="200">			
+					<button type="button" disabled id="takePictureButton">Take a picture</button>	
+					<input type="hidden" name="image" id="image">
+					
+					<input type="button" class="ui-btn" id="saveButton" value="Save">
+					<a class="ui-btn ui-corner-all" data-rel="back" id="cancelButton">Cancel</a>
+				</form>
+			</div>
+		</div>
+		
+		<div data-role="footer">
+		</div>
+	</div>
+
+<!--JAVASCRIPT--------------------------------------------------------------->	
+	<script type="text/javascript" src="cordova.js"></script> <!-- device features -->	
+	<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY=geometry"></script>
+	<script>
+
+		var deviceNotReady = $.Deferred(); //brake 1
+		var frontPageNotReady = $.Deferred(); //brake 2
+		var imageStr = "";
+		var pictureSource;
+		var destinationType;
+		
+		//when breaks are resolved
+		$.when(deviceNotReady, frontPageNotReady).done(getLocation, cameraReady);
+		
+		document.addEventListener("deviceReady", onDeviceReady, false);
+		
+		//when device is ready
+		function onDeviceReady() {
+			pictureSource = navigator.camera.PictureSourceType;
+			destinationType = navigator.camera.DestinationType;
+			deviceNotReady.resolve(); //resolve break 1
+			frontPageNotReady.resolve(); //resolve break 2
+		}
+
+//--LOCATION----------------------------------------------------------------------
+		
+		function getLocation() {
+			navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, { timeout: 20000 });
+			function onLocationSuccess(position) {						
+				initMap(position.coords.latitude, position.coords.longitude);
+				console.log("Location found successfully");
+				//alert("Location found successfully");
+			}
+			function onLocationError() { //if location not found
+				initMap(60.201645, 24.934199); //school address
+				console.log("Location not found");
+				//alert("location not found");
+			}
+		}
+		
+//--MAP---------------------------------------------------------------------
+		
+		var position;
+		var map;
+		function initMap(lat, lng) {				
+			position = new google.maps.LatLng(lat, lng);	
+			
+			var myOptions = {
+				zoom:12,
+				center: position
+			};
+			
+			map = new google.maps.Map(document.getElementById("map"), myOptions);		
+			
+			//add marker
+			var markerImage = 'img/marker_red.png';
+			var marker = new google.maps.Marker({
+				position: position,
+				map: map,
+				icon: markerImage,
+				title: "Your current location"
+			});
+			
+			getMarkers();
+			
+			//if map is clicked, get position
+			google.maps.event.addListener(map, "click", function (event) {
+				var lat = event.latLng.lat();
+				var lng = event.latLng.lng();
+				localStorage.setItem("lat", lat); //add to local storage
+				localStorage.setItem("lng", lng);
+				$(location).attr("href","#savePage"); //to save page
+			});
+		}
+		
+		
+//--CAMERA---------------------------------------------------------------------
+		
+		function cameraReady() {			
+			$( "#takePictureButton" ).attr( "disabled", false ); //enable take a picture button
+			
+			//if take a picture button is tapped
+			$( "#takePictureButton" ).on("tap", function() {				
+				navigator.camera.getPicture(onCaptureSuccess, onError, {
+					quality: 25,
+					destinationType: Camera.DestinationType.DATA_URL, //to base 64 format
+					saveToPhotoAlbum: true,					
+				})
+			})
+			
+			function onCaptureSuccess(imageData) {		
+				$("#showImage").attr("src", "data:image/jpeg;base64," + imageData); //when DATA_URL
+				$("#showImage").show();
+				imageStr = imageData;
+				localStorage.setItem("image", imageStr); //add image to local storage
+			}
+			
+			function onError() {
+				console.log("Can't take a picture");
+			}
+		}
+		
+//--SAVE--------------------------------------------------------------------------
+		
+		//if save button is tapped
+		$("#saveButton").on("tap", function() {
+			
+			//get data from local storage
+			var lat = localStorage.getItem("lat");
+			//console.log(lat);
+			var lng = localStorage.getItem("lng");
+			//console.log(lng);
+			var image = localStorage.getItem("image");
+			//console.log(image);
+			
+			//set data to form
+			$("#lat").val(lat);
+			$("#lng").val(lng);
+			$("#image").val(image);
+			
+			//add from data to database
+			$.ajax({
+				type: 'POST',
+				data: $("#saveForm").serialize(),
+				url: 'insert.php',
+				success: function(data){
+					console.log("Position added to database");
+					localStorage.clear(); //clear local storage
+					$("#saveForm")[0].reset(); //empty form
+					$("#showImage").hide(); //hide image
+					getMarkers(); //get markers from database
+					$(location).attr("href","#frontPage"); //go to front page
+				},
+				error: function(){	
+					console.log("Can't add position to database");
+				}
+			});
+		});
+		
+		//if cancel button is tapped
+		$("#cancelButton").on("tap", function() {
+			$("#saveForm")[0].reset(); //empty form
+			$("#showImage").hide(); //hide image
+			getMarkers();
+			
+		});
+		
+//--SHOW MARKERS ON THE MAP----------------------------------------------------------
+		
+		function getMarkers() {
+			
+			//get saved markers from database
+			$.getJSON("select.php", function(result){
+											
+				for(var i = 0; i < result.length; i++){
+					var position={
+					"lat" : parseFloat(result[i].lat),
+					"lng" : parseFloat(result[i].lng)
+					};
+					var name = result[i].name;
+					var image = "data:image/jpeg;base64," + result[i].image;
+					
+					//add marker
+					var markerImage = 'img/marker_blue.png';
+					var marker = new google.maps.Marker({
+						position: position,
+						map: map,
+						icon: markerImage,
+						title: name
+					});
+					
+					//image and name content for info window
+					var contentString = "<img src=" + image + " height='100' width='100'><div> " + name + "</div>";
+					
+					addInfoWindow(marker, contentString);
+					
+				}
+			});
+		}
+		
+		//add info windows for markers
+		function addInfoWindow(marker, contentString) {
+			
+			//make new info window with image and name content
+			var infoWindow = new google.maps.InfoWindow({
+				content: contentString
+			});
+
+			//open info window when marker is clicked
+			google.maps.event.addListener(marker, 'click', function () {
+				infoWindow.open(map, marker);
+			});
+		}
+	
+		
+	</script>
+	
+</body>
+
+</html>
